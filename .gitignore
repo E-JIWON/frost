@@ -1,0 +1,4 @@
+# build output; the signed app also carries the signer's certificate name
+Frost.app/
+AppIcon.iconset/
+.DS_Store
