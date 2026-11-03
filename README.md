@@ -31,9 +31,11 @@ xcode-select --install
 
 ```bash
 brew install e-jiwon/tap/frost
+brew trust --formula e-jiwon/tap/frost
 open "$(brew --prefix)/opt/frost/Frost.app"
 ```
 
+- 두 번째 줄은 한 번만 하면 된다. Homebrew 6부터 개인 tap의 앱은 믿는다고 표시해야 `brew upgrade frost` · `brew uninstall frost`처럼 짧은 이름으로 다룰 수 있다
 - 업데이트: `brew upgrade frost` 뒤 패널에서 종료하고 위의 `open` 명령으로 다시 연다
 - Homebrew 빌드는 업데이트할 때마다 서명이 바뀐다. 업데이트 뒤 키보드 창 전환이 늦어지면 `tccutil reset Accessibility local.frost`를 실행하고 Frost를 다시 열어 손쉬운 사용 권한을 다시 준다. **로그인 시 실행**을 쓰고 있었다면 패널에서 한 번 껐다 켠다
 
