@@ -1,0 +1,10 @@
+# Builds Frost and runs its self-check on every push and pull request.
+name: check
+on: [push, pull_request]
+jobs:
+  selftest:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swiftc -O main.swift -o Frost
+      - run: ./Frost --selftest

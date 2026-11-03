@@ -1,14 +1,17 @@
 #!/bin/sh
 # Builds Frost.app next to this script, checks it, and installs it to /Applications.
+# Given a path, only builds the app there (Homebrew uses this): ./build.sh /some/where/Frost.app
 set -e
 cd "$(dirname "$0")"
+app=${1:-Frost.app}
+case "$app" in *.app) ;; *) echo "the path must end in .app" >&2; exit 1 ;; esac
 [ -f AppIcon.icns ] || swift icon.swift
-rm -rf Frost.app
-mkdir -p Frost.app/Contents/MacOS Frost.app/Contents/Resources
-swiftc -O main.swift -o Frost.app/Contents/MacOS/Frost
-Frost.app/Contents/MacOS/Frost --selftest
-cp AppIcon.icns Frost.app/Contents/Resources/
-cat > Frost.app/Contents/Info.plist <<EOF
+rm -rf "$app"
+mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+swiftc -O main.swift -o "$app/Contents/MacOS/Frost"
+"$app/Contents/MacOS/Frost" --selftest
+cp AppIcon.icns "$app/Contents/Resources/"
+cat > "$app/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -17,15 +20,16 @@ cat > Frost.app/Contents/Info.plist <<EOF
   <key>CFBundleName</key><string>Frost</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundleShortVersionString</key><string>1.0.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
 </dict></plist>
 EOF
 # A real identity keeps permissions across rebuilds; ad-hoc if there is none.
-codesign -s "Apple Development" --force Frost.app 2>/dev/null || codesign -s - --force Frost.app
+codesign -s "Apple Development" --force "$app" 2>/dev/null || codesign -s - --force "$app"
+if [ -n "$1" ]; then exit 0; fi
 osascript -e 'quit app "Frost"' 2>/dev/null || true
 rm -rf /Applications/Frost.app
-ditto Frost.app /Applications/Frost.app
+ditto "$app" /Applications/Frost.app
 echo "installed /Applications/Frost.app"

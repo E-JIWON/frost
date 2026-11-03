@@ -1,5 +1,7 @@
 # Frost
 
+[![check](https://github.com/E-JIWON/frost/actions/workflows/check.yml/badge.svg)](https://github.com/E-JIWON/frost/actions/workflows/check.yml)
+
 맨 앞 창 하나만 선명하게 두고, 그 뒤 화면 전체를 블러 · 색 · 그레인으로 덮는 macOS 메뉴 막대 앱.
 집중할 창만 남기고 나머지는 서리 낀 유리 뒤로 보낸다.
 
@@ -12,23 +14,30 @@
 - 앱 제외, 앱 그룹, 화면별 포커스
 - 스크린샷 · 화면 녹화 · Mission Control에 안 보인다
 - 켜져 있는 동안 Dock을 자동으로 숨기고, 끄면 원래대로 돌려놓는다
-- 가볍다: 작성자 Mac에서 CPU 0.5~1%, 메모리 30~50MB
+- 가볍다: CPU 약 1%, 메모리 약 60MB ([측정 기록](docs/testing.md))
 - 네트워크를 쓰지 않는다. 창의 위치와 어느 앱 창인지만 보고, 창 안의 내용은 읽지 않는다
 
 ## 설치
 
-### 필요한 것
+macOS 14 (Sonoma) 이상과 Swift 컴파일러(Xcode 15 이상 또는 Command Line Tools)가 필요하다.
 
-- macOS 14 (Sonoma) 이상
-- Swift 컴파일러: Xcode 15 이상, 또는 Command Line Tools
+```bash
+xcode-select --install
+```
 
-  ```bash
-  xcode-select --install
-  ```
+공증(notarization)한 배포 파일이 없어서, 어느 방법이든 내 Mac에서 직접 빌드한다. 그래서 "확인되지 않은 개발자" 경고 없이 바로 열린다. 1분이면 된다.
 
-공증(notarization)한 배포 파일이 없어서 소스에서 직접 빌드한다. 1분이면 된다.
+### Homebrew로 설치 (추천)
 
-### 빌드하고 설치하기
+```bash
+brew install e-jiwon/tap/frost
+open "$(brew --prefix)/opt/frost/Frost.app"
+```
+
+- 업데이트: `brew upgrade frost` 뒤 패널에서 종료하고 위의 `open` 명령으로 다시 연다
+- Homebrew 빌드는 업데이트할 때마다 서명이 바뀐다. 업데이트 뒤 키보드 창 전환이 늦어지면 `tccutil reset Accessibility local.frost`를 실행하고 Frost를 다시 열어 손쉬운 사용 권한을 다시 준다. **로그인 시 실행**을 쓰고 있었다면 패널에서 한 번 껐다 켠다
+
+### 소스에서 빌드
 
 ```bash
 git clone https://github.com/E-JIWON/frost.git
@@ -51,7 +60,7 @@ open /Applications/Frost.app
 1. 메뉴 막대에 점 무늬 속 창 모양 아이콘이 생긴다. 바로 켜진 상태로 시작한다
 2. **손쉬운 사용 권한**을 물어본다. 선택 사항이다
    - 주면: 같은 앱 안에서 키보드로 창을 바꿀 때(⌘\`, ⌘N) 바로 따라간다 (약 30ms)
-   - 안 주면: 0.1초마다 확인해서 따라간다 (약 0.1초 늦음). 나머지는 똑같다
+   - 안 주면: 0.1초마다 확인해서 따라간다 (평균 약 65ms). 나머지는 똑같다
    - 나중에 주려면: 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 → Frost 켜기. 다시 실행할 필요 없이 다른 앱으로 한 번 전환하면 적용된다
 3. Dock이 자동 숨김으로 바뀐다. 원치 않으면 패널에서 끈다
 
@@ -114,8 +123,8 @@ open /Applications/Frost.app
 - **창 단위**: 앱이 아니라 창을 본다. 크롬에서 새 창을 열면 새 창이 선명해지고 원래 크롬 창은 흐려진다
 - **얼마나 빨리 따라가나**
   - 클릭, 앱 전환(⌘Tab), 창 끌기: 즉시
-  - 같은 앱 안의 키보드 전환(⌘\`, ⌘N): 손쉬운 사용 권한이 있으면 약 30ms, 없으면 약 0.1초
-  - 뒤에서 다른 앱 창이 튀어나올 때: 약 0.1초
+  - 같은 앱 안의 키보드 전환(⌘\`, ⌘N): 손쉬운 사용 권한이 있으면 평균 약 30ms, 없으면 약 65ms
+  - 뒤에서 다른 앱 창이 튀어나올 때: 평균 약 60ms (0.1초마다 확인)
 - **건드리지 않는 것**: 메뉴, 확장 프로그램 팝업, 속 화면 보기(PIP)처럼 일반 창보다 위에 뜨는 것, 50pt보다 작은 창
 - **스크린샷 · 화면 녹화**: Frost는 안 찍힌다. 캡처하면 흐리지 않은 원래 화면이 나온다. 스크린샷을 찍기 시작해도 앞 창이 흐려지지 않는다
 - **Mission Control**: Frost가 보이지 않는다
@@ -138,7 +147,8 @@ open /Applications/Frost.app
 2. 지운다
 
    ```bash
-   rm -rf /Applications/Frost.app          # 또는 Finder에서 휴지통으로
+   brew uninstall frost                    # Homebrew로 설치했다면
+   rm -rf /Applications/Frost.app          # 소스로 설치했다면 (또는 Finder에서 휴지통으로)
    defaults delete local.frost             # 설정
    tccutil reset Accessibility local.frost # 손쉬운 사용 목록에서 빼기
    ```
@@ -151,7 +161,7 @@ open /Applications/Frost.app
 - **화면을 덮는 법**: 화면마다 클릭이 통과하는 창을 하나씩 띄우고, 맨 앞 창 바로 아래에 둔다. 창 안의 `CABackdropLayer`가 그 뒤를 블러하고, 그 위에 색과 그레인을 얹는다. 블러 모양은 `variableBlur` 필터의 세기 마스크로 만든다. 제외 · 그룹 창은 마스크에 구멍을 뚫어 선명하게 남긴다
 - **앞 창 찾기**: `CGWindowListCopyWindowInfo`로 창 목록을 앞에서부터 읽는다 (호출당 약 0.6ms). 앱 전환 · Space 변경 · 마우스 클릭/드래그 이벤트에 바로 반응하고, 손쉬운 사용 권한이 있으면 맨 앞 앱의 창 포커스 변화(AXObserver)도 받는다. 이벤트로 알 수 없는 변화는 0.1초 확인으로 잡는다
 - **비공개 API**: `CABackdropLayer`, `CAFilter`(variableBlur), `CoreDockGet/SetAutoHideEnabled`. 그래서 App Store에는 낼 수 없다. 모두 실행 중에 찾아 쓰기 때문에, macOS가 하나를 없애도 앱이 안 켜지는 대신 그 기능만 빠진다
-- **검사**: `Frost.app/Contents/MacOS/Frost --selftest`가 포커스 · 제외 · 그룹 · 화면별 포커스 · 전체 화면 규칙을 17개 항목으로 확인한다. `build.sh`가 매번 돌린다
+- **검사**: `Frost.app/Contents/MacOS/Frost --selftest`가 포커스 · 제외 · 그룹 · 화면별 포커스 · 전체 화면 규칙을 17개 항목으로 확인한다. `build.sh`와 깃헙 Actions가 매번 돌린다. 반응 속도 측정(`bench/run.sh`)과 직접 확인한 목록은 [docs/testing.md](docs/testing.md)에 있다
 - **컴파일**: Swift 6 언어 모드, 엄격한 동시성 검사에서도 경고 0개
 - **설정 저장 위치**: `defaults read local.frost`
 - 화면 문구는 한국어만 있다
