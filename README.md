@@ -37,7 +37,7 @@ open "$(brew --prefix)/opt/frost/Frost.app"
 
 - 두 번째 줄은 한 번만 하면 된다. Homebrew 6부터 개인 tap의 앱은 믿는다고 표시해야 `brew upgrade frost` · `brew uninstall frost`처럼 짧은 이름으로 다룰 수 있다
 - 업데이트: `brew upgrade frost` 뒤 패널에서 종료하고 위의 `open` 명령으로 다시 연다
-- Homebrew 빌드는 업데이트할 때마다 서명이 바뀐다. 업데이트 뒤 키보드 창 전환이 늦어지면 `tccutil reset Accessibility local.frost`를 실행하고 Frost를 다시 열어 손쉬운 사용 권한을 다시 준다. **로그인 시 실행**을 쓰고 있었다면 패널에서 한 번 껐다 켠다
+- Homebrew 빌드는 업데이트할 때마다 서명이 바뀐다. 업데이트 뒤 키보드 창 전환이 늦어지면 `tccutil reset Accessibility local.frost`를 실행하고, Frost를 다시 열어 패널의 **손쉬운 사용 권한 → 허용**으로 다시 준다. **로그인 시 실행**을 쓰고 있었다면 패널에서 한 번 껐다 켠다
 
 ### 소스에서 빌드
 
@@ -57,15 +57,16 @@ open /Applications/Frost.app
 
 업데이트: `git pull && ./build.sh` 뒤 다시 연다.
 
-> ad-hoc 서명이면 다시 빌드할 때마다 macOS가 다른 앱으로 본다. 그래서 시스템 설정에는 켜져 있어도 손쉬운 사용 권한이 듣지 않는다. 이때는 `tccutil reset Accessibility local.frost` 후 Frost를 다시 열어 권한을 다시 준다. 무료 Apple ID로도 Xcode에서 "Apple Development" 인증서를 만들 수 있고, 그러면 권한이 계속 유지된다.
+> ad-hoc 서명이면 다시 빌드할 때마다 macOS가 다른 앱으로 본다. 그래서 시스템 설정에는 켜져 있어도 손쉬운 사용 권한이 듣지 않는다. 이때는 `tccutil reset Accessibility local.frost` 후 Frost를 다시 열고 패널의 **손쉬운 사용 권한 → 허용**으로 다시 준다. 무료 Apple ID로도 Xcode에서 "Apple Development" 인증서를 만들 수 있고, 그러면 권한이 계속 유지된다.
 
 ### 처음 실행
 
 1. 메뉴 막대에 점 무늬 속 창 모양 아이콘이 생긴다. 바로 켜진 상태로 시작한다
 2. **손쉬운 사용 권한**을 물어본다. 선택 사항이다
    - 주면: 같은 앱 안에서 키보드로 창을 바꿀 때(⌘\`, ⌘N) 바로 따라간다 (약 30ms)
-   - 안 주면: 0.1초마다 확인해서 따라간다 (평균 약 65ms). 나머지는 똑같다. 다만 Frost를 열 때마다 다시 물어본다
-   - 나중에 주려면: 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용 → Frost를 켜고, Frost를 종료했다가 다시 연다
+   - 안 주면: 0.1초마다 확인해서 따라간다 (평균 약 65ms). 나머지는 똑같다
+   - 묻는 건 새로 설치하거나 빌드한 뒤 처음 열 때 한 번뿐이다
+   - 나중에 주려면: 패널의 **손쉬운 사용 권한 → 허용**을 누르고 시스템 설정에서 Frost를 켠 다음, Frost를 종료했다가 다시 연다
 3. Dock이 자동 숨김으로 바뀐다. 원치 않으면 패널에서 끈다
 
 ## 사용법
@@ -101,6 +102,7 @@ open /Applications/Frost.app
 | 화면별 포커스 | 켜짐 | 켜면 모니터마다 그 화면의 맨 위 창이 선명하다. 끄면 모든 모니터를 통틀어 맨 앞 창 하나만 선명하다 |
 | 머물면 흐림 줄이기 | 켜짐 | 흐린 곳에 포인터를 0.5초 올려두면 흐림이 옅어져 뒤 창이 비쳐 보인다. 다른 창으로 옮기기 전에 위치를 확인할 때 좋다. 선명한 창으로 포인터를 옮기면 바로 돌아온다 |
 | Dock 자동 숨기기 | 켜짐 | Frost가 켜져 있는 동안만 Dock을 숨긴다. 화면 아래로 포인터를 가져가면 Dock이 나온다. 끄거나 Frost를 종료하면 원래 설정으로 돌아간다 |
+| 손쉬운 사용 권한 | | 권한이 없을 때만 보인다. **허용**을 누르면 macOS 권한 창이 뜬다 |
 
 ### 앱 제외
 
@@ -142,8 +144,7 @@ open /Applications/Frost.app
 | 키보드로 창을 바꾸면 살짝 늦게 따라온다 | 손쉬운 사용 권한을 준다 (처음 실행 2번 참고) |
 | Frost가 강제 종료된 뒤 Dock이 계속 숨겨져 있다 | Frost를 다시 실행했다가 패널의 종료로 끈다. 정상 종료나 `kill`로 끄면 자동으로 돌아오지만, 강제 종료(`kill -9`)는 어떤 앱도 정리할 틈이 없다 |
 | 빌드할 때 `swiftc: command not found` | `xcode-select --install` |
-| 다시 빌드하거나 `brew upgrade` 뒤 권한이 켜져 있는데도 키보드 전환이 늦다 | 서명이 바뀌어 예전 권한이 안 듣는 것이다. `tccutil reset Accessibility local.frost` 후 Frost를 다시 열어 권한을 다시 준다 |
-| Frost를 열 때마다 손쉬운 사용 권한을 물어본다 | 권한을 주지 않은 상태라서 그렇다. 주거나, 물어볼 때 거부하고 그대로 써도 된다 |
+| 다시 빌드하거나 `brew upgrade` 뒤 권한이 켜져 있는데도 키보드 전환이 늦다 | 서명이 바뀌어 예전 권한이 안 듣는 것이다. `tccutil reset Accessibility local.frost` 후 Frost를 다시 열고 패널의 **손쉬운 사용 권한 → 허용**으로 다시 준다 |
 | 블러가 안 보이고 색만 덮인다 | macOS가 블러에 쓰는 비공개 기능을 바꾼 경우다. 이때도 앱은 켜지고 색 · 그레인은 동작한다. 이슈로 알려주면 좋다 |
 
 ## 지우기
@@ -164,9 +165,9 @@ open /Applications/Frost.app
 
 - **파일**: `main.swift` 하나에 앱 전체가 있다. `build.sh`는 빌드 · 검사 · 설치, `icon.swift`는 `AppIcon.icns`를 코드로 그린다 (없을 때만 `build.sh`가 실행)
 - **화면을 덮는 법**: 화면마다 클릭이 통과하는 창을 하나씩 띄우고, 맨 앞 창 바로 아래에 둔다. 창 안의 `CABackdropLayer`가 그 뒤를 블러하고, 그 위에 색과 그레인을 얹는다. 블러 모양은 `variableBlur` 필터의 세기 마스크로 만든다. 제외 · 그룹 창은 마스크에 구멍을 뚫어 선명하게 남긴다
-- **앞 창 찾기**: `CGWindowListCopyWindowInfo`로 창 목록을 앞에서부터 읽는다 (호출당 약 0.6ms). 앱 전환 · Space 변경 · 마우스 클릭/드래그 이벤트에 바로 반응하고, 손쉬운 사용 권한이 있으면 맨 앞 앱의 창 포커스 변화(AXObserver)도 받는다. 이벤트로 알 수 없는 변화는 0.1초 확인으로 잡는다
-- **비공개 API**: `CABackdropLayer`, `CAFilter`(variableBlur), `CoreDockGet/SetAutoHideEnabled`. 그래서 App Store에는 낼 수 없다. 모두 실행 중에 찾아 쓰기 때문에, macOS가 하나를 없애도 앱이 안 켜지는 대신 그 기능만 빠진다
-- **검사**: `Frost.app/Contents/MacOS/Frost --selftest`가 포커스 · 제외 · 그룹 · 화면별 포커스 · 전체 화면 규칙을 17개 항목으로 확인한다. `build.sh`와 깃헙 Actions가 매번 돌린다. 반응 속도 측정(`bench/run.sh`)과 직접 확인한 목록은 [docs/testing.md](docs/testing.md)에 있다
+- **앞 창 찾기**: `CGWindowListCopyWindowInfo`로 창 목록을 앞에서부터 읽는다 (호출당 약 0.6ms). 앱 전환 · Space 변경 · 마우스 클릭/드래그 이벤트에 바로 반응하고, 손쉬운 사용 권한이 있으면 맨 앞 앱의 창 포커스 변화(AXObserver)도 받는다. 이벤트로 알 수 없는 변화는 0.1초 확인으로 잡는다. 화면이 잠기거나 꺼져 있는 동안은 이 확인을 멈춘다
+- **비공개 API**: `CABackdropLayer`, `CAFilter`(variableBlur), `CoreDockGet/SetAutoHideEnabled`, 전체 화면 Space를 알아보는 `CGSManagedDisplayGetCurrentSpace` · `CGSSpaceGetType`. 그래서 App Store에는 낼 수 없다. 모두 실행 중에 찾아 쓰기 때문에, macOS가 하나를 없애도 앱이 안 켜지는 대신 그 기능만 빠진다
+- **검사**: `Frost.app/Contents/MacOS/Frost --selftest`가 포커스 · 제외 · 그룹 · 화면별 포커스 · 전체 화면 규칙을 17개 항목으로 확인한다. `build.sh`와 깃헙 Actions가 매번 돌리고, Actions는 Swift 6 모드로도 컴파일해 본다. 반응 속도 측정(`bench/run.sh`)과 직접 확인한 목록은 [docs/testing.md](docs/testing.md)에 있다
 - **컴파일**: Swift 6 언어 모드, 엄격한 동시성 검사에서도 경고 0개
 - **설정 저장 위치**: `defaults read local.frost`
 - 화면 문구는 한국어만 있다

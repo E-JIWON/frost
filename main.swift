@@ -7,11 +7,15 @@ import SwiftUI
 // - CABackdropLayer + windowServerAware blurs what's behind the window (the engine under NSVisualEffectView);
 //   its variableBlur filter takes a strength mask, which gives the blur shapes.
 // - CoreDock toggles Dock auto-hide.
+// - The CGS Space calls tell a full-screen Space apart from a desktop.
 func privateFunction<T>(_ name: String, as type: T.Type) -> T? {
     dlsym(UnsafeMutableRawPointer(bitPattern: -2), name).map { unsafeBitCast($0, to: type) }  // -2 = RTLD_DEFAULT, every loaded image
 }
 let dockAutoHide = privateFunction("CoreDockGetAutoHideEnabled", as: (@convention(c) () -> Bool).self)
 let setDockAutoHide = privateFunction("CoreDockSetAutoHideEnabled", as: (@convention(c) (Bool) -> Void).self)
+let cgsConnection = privateFunction("CGSMainConnectionID", as: (@convention(c) () -> Int32).self)
+let displaySpace = privateFunction("CGSManagedDisplayGetCurrentSpace", as: (@convention(c) (Int32, CFString) -> UInt64).self)
+let spaceType = privateFunction("CGSSpaceGetType", as: (@convention(c) (Int32, UInt64) -> Int32).self)
 
 // (value, title)
 let modes = [("deep", "깊게"), ("ambient", "은은하게")]
@@ -127,6 +131,7 @@ final class Settings: ObservableObject {
 @MainActor final class Overlay {
     let window: NSWindow
     let bounds: CGRect  // the pane, in window-list coordinates
+    let display: CGDirectDisplayID
     let menuBar: CGFloat  // height of the menu bar strip at its top
     let content = CALayer()  // holds the three layers; its mask cuts holes for windows that stay sharp
     let backdrop = (NSClassFromString("CABackdropLayer") as? CALayer.Type ?? CALayer.self).init()  // plain layer = no blur
@@ -153,6 +158,7 @@ final class Settings: ObservableObject {
         window.contentView!.wantsLayer = true
         window.setFrame(frame, display: false)
         bounds = CGRect(x: frame.minX, y: NSScreen.screens[0].frame.maxY - frame.maxY, width: frame.width, height: frame.height)
+        display = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
 
         backdrop.setValue(true, forKey: "windowServerAware")  // (its "scale" key, for cheaper half-res blur, turns the blur off)
         grain.contents = noise(frame.size)
@@ -183,6 +189,8 @@ final class Settings: ObservableObject {
     let quitOnTerm = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
     var focusWatch: AXObserver?  // the front app's windows, see watchFrontApp
     var watchTries = 0
+    var poll: Timer?
+    var unseen: Set<String> = [] { didSet { setPolling() } }  // why nobody can see the screen right now
 
     func applicationDidFinishLaunching(_ note: Notification) {
         s.onChange = { [weak self] k in self?.settingChanged(k) }
@@ -207,24 +215,56 @@ final class Settings: ObservableObject {
         }
         ws.addObserver(self, selector: #selector(appQuit), name: NSWorkspace.didTerminateApplicationNotification, object: nil)
         ws.addObserver(self, selector: #selector(watchFrontApp), name: NSWorkspace.didActivateApplicationNotification, object: nil)
-        // Accessibility makes keyboard window switches (⌘`, ⌘N) show at once; macOS asks for it until it's granted.
-        // Without it those wait for the poll below.
-        AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+        // Accessibility makes keyboard window switches (⌘`, ⌘N) show at once; without it those wait for the poll
+        // below. Asked once per build (a new build is signed anew and needs it again); after that the panel offers it.
+        let build = (try? Bundle.main.executableURL?.resourceValues(forKeys: [.contentModificationDateKey]))?
+            .contentModificationDate.map { "\($0.timeIntervalSince1970)" } ?? ""
+        if !AXIsProcessTrusted(), s.prefs.string(forKey: "askedAccessibility") != build {
+            s.prefs.set(build, forKey: "askedAccessibility")
+            askAccessibility()
+        }
         watchFrontApp()
         NotificationCenter.default.addObserver(self, selector: #selector(buildOverlays),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .leftMouseDragged]) { [weak self] _ in self?.soon() }
-        // Catches what no event reports, like a background app's window popping up (a window list costs ~0.6ms)
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {  // on the main run loop
-                self?.tick()
-                self?.followPointer()
+        // The poll stops while nobody can see the screen: display asleep, another user's session, screen locked.
+        let pauses: [(NotificationCenter, Notification.Name, Notification.Name, String)] = [
+            (ws, NSWorkspace.screensDidSleepNotification, NSWorkspace.screensDidWakeNotification, "asleep"),
+            (ws, NSWorkspace.sessionDidResignActiveNotification, NSWorkspace.sessionDidBecomeActiveNotification, "away"),
+            (DistributedNotificationCenter.default(), Notification.Name("com.apple.screenIsLocked"),
+             Notification.Name("com.apple.screenIsUnlocked"), "locked"),
+        ]
+        for (center, stop, resume, why) in pauses {
+            center.addObserver(forName: stop, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { _ = self?.unseen.insert(why) }
+            }
+            center.addObserver(forName: resume, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.unseen.remove(why)
+                    self?.soon()
+                }
             }
         }
+        setPolling()
         // kill/pkill quit properly too, so the Dock gets put back
         signal(SIGTERM, SIG_IGN)
         quitOnTerm.setEventHandler { MainActor.assumeIsolated { NSApp.terminate(nil) } }
         quitOnTerm.resume()
+    }
+
+    // Catches what no event reports, like a background app's window popping up (a window list costs ~0.6ms).
+    func setPolling() {
+        if unseen.isEmpty, poll == nil {
+            poll = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated {  // on the main run loop
+                    self?.tick()
+                    self?.followPointer()
+                }
+            }
+        } else if !unseen.isEmpty {
+            poll?.invalidate()
+            poll = nil
+        }
     }
 
     func followPointer() {
@@ -349,7 +389,10 @@ final class Settings: ObservableObject {
         dirty = false
         let excluded = Set(s.excluded), groups = s.groups, perScreen = s.perScreen
         for o in overlays {
-            let (target, holes) = layout(o.bounds, wins, excluded: excluded, groups: groups, perScreen: perScreen)
+            var (target, holes) = layout(o.bounds, wins, excluded: excluded, groups: groups, perScreen: perScreen)
+            // In a full-screen Space (a full-screen app or Split View) the window server keeps the pane above the
+            // app's windows, where it would frost the window you're using: stay out of those.
+            if showsFullScreenSpace(o.display) { target = 0 }
             o.target = target
             o.above = wins.firstIndex { $0.id == target }.map { wins[...$0].map(\.rect) } ?? []
             if target == 0 { o.window.orderOut(nil) } else { o.window.order(.below, relativeTo: target) }
@@ -434,6 +477,7 @@ final class Settings: ObservableObject {
 struct Panel: View {
     @ObservedObject var s: Settings
     @State private var draft: Set<String>?  // apps picked for a new group, nil while not making one
+    @State private var trusted = AXIsProcessTrusted()  // Accessibility, checked again each time the panel opens
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -458,6 +502,16 @@ struct Panel: View {
                 ToggleRow(title: "화면별 포커스", detail: "화면마다 맨 위 창을 선명하게", isOn: $s.perScreen)
                 ToggleRow(title: "머물면 흐림 줄이기", detail: "바깥 영역에 잠깐(0.5초) 머물면 뒤 창이 비쳐 보여요", isOn: $s.softenOnRest)
                 ToggleRow(title: "Dock 자동 숨기기", detail: "켜져 있는 동안만, 끄면 원래대로", isOn: $s.hideDock)
+                if !trusted {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("손쉬운 사용 권한").font(.system(size: 12, weight: .medium))
+                            Text("주면 키보드로 창을 바꿀 때 바로 따라가요").font(.system(size: 11)).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("허용") { askAccessibility() }.controlSize(.small)
+                    }
+                }
             }
             Card { excludedSection }
             Card { groupsSection }
@@ -472,6 +526,7 @@ struct Panel: View {
         .padding(14)
         .frame(width: 330)
         .tint(Color(nsColor: color(bdsSage)))
+        .onAppear { trusted = AXIsProcessTrusted() }
     }
 
     var header: some View {
@@ -661,6 +716,20 @@ struct AppRow: View {
 }
 
 // MARK: helpers
+
+// Whether a display shows a full-screen Space (a full-screen app or Split View) right now.
+func showsFullScreenSpace(_ display: CGDirectDisplayID) -> Bool {
+    guard let cgsConnection, let displaySpace, let spaceType,
+          let uuid = CGDisplayCreateUUIDFromDisplayID(display)?.takeRetainedValue(),
+          let name = CFUUIDCreateString(nil, uuid) else { return false }
+    let connection = cgsConnection()
+    return spaceType(connection, displaySpace(connection, name)) == 4  // 0 is a desktop, 4 full screen
+}
+
+// Shows macOS's Accessibility prompt, which leads to System Settings.
+func askAccessibility() {
+    AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
+}
 
 // Bundle ids of the apps with a Dock presence, by name.
 func runningApps() -> [String] {
