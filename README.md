@@ -170,3 +170,7 @@ open /Applications/Frost.app
 - **컴파일**: Swift 6 언어 모드, 엄격한 동시성 검사에서도 경고 0개
 - **설정 저장 위치**: `defaults read local.frost`
 - 화면 문구는 한국어만 있다
+
+## 라이선스
+
+[MIT](LICENSE). 아무런 보증 없이 제공한다.
