@@ -20,8 +20,13 @@ let spaceType = privateFunction("CGSSpaceGetType", as: (@convention(c) (Int32, U
 // (value, title)
 let modes = [("deep", "깊게"), ("ambient", "은은하게")]
 let shapes = [("even", "균일"), ("bottom", "아래로"), ("top", "위로"), ("edges", "가장자리")]
-// BDS ink, then the BDS comment colors deepened toward #241E18 in oklab (45%), like BDS deepens active text (62%).
-let swatches = [("141210", "잉크"), ("3D483A", "세이지"), ("3D5961", "스카이"), ("685432", "샌드"), ("446148", "민트"), ("694144", "핑크")]
+// The macOS system colors, led by the accent color picked in System Settings; any other color is saved as hex.
+let swatches: [(String, String, NSColor)] = [
+    ("accent", "시스템 강조 색", .controlAccentColor), ("blue", "파랑", .systemBlue), ("purple", "보라", .systemPurple),
+    ("pink", "분홍", .systemPink), ("red", "빨강", .systemRed), ("orange", "주황", .systemOrange),
+    ("yellow", "노랑", .systemYellow), ("green", "초록", .systemGreen), ("graphite", "그래파이트", .systemGray),
+    ("black", "검정", .black),
+]
 let bdsSage = "5A8268"
 
 // MARK: layout
@@ -86,11 +91,11 @@ final class Settings: ObservableObject {
             "appGroups": [["com.anthropic.claudefordesktop", "com.microsoft.VSCode"],
                           ["com.anthropic.claudefordesktop", "com.google.Chrome"]],
         ]
-        for (m, blur, grain, tint) in [("ambient", 12.0, 0.04, 0.08), ("deep", 28.0, 0.08, 0.18)] {
+        for (m, blur, grain, tint) in [("ambient", 12.0, 0.1, 0.08), ("deep", 28.0, 0.2, 0.18)] {
             defaults["\(m).blur"] = blur
             defaults["\(m).grain"] = grain
             defaults["\(m).tint"] = tint
-            defaults["\(m).color"] = "141210"
+            defaults["\(m).color"] = "black"
             defaults["\(m).shape"] = "even"
         }
         prefs.register(defaults: defaults)
@@ -100,7 +105,7 @@ final class Settings: ObservableObject {
     var blur: Double { get { prefs.double(forKey: look("blur")) } set { save(look("blur"), newValue) } }
     var grain: Double { get { prefs.double(forKey: look("grain")) } set { save(look("grain"), newValue) } }
     var tint: Double { get { prefs.double(forKey: look("tint")) } set { save(look("tint"), newValue) } }
-    var color: String { get { prefs.string(forKey: look("color")) ?? "141210" } set { save(look("color"), newValue) } }
+    var color: String { get { prefs.string(forKey: look("color")) ?? "black" } set { save(look("color"), newValue) } }
     var shape: String { get { prefs.string(forKey: look("shape")) ?? "even" } set { save(look("shape"), newValue) } }
     var perScreen: Bool { get { prefs.bool(forKey: "perScreen") } set { save("perScreen", newValue) } }
     var hideDock: Bool { get { prefs.bool(forKey: "hideDock") } set { save("hideDock", newValue) } }
@@ -161,8 +166,8 @@ final class Settings: ObservableObject {
         display = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID ?? 0
 
         backdrop.setValue(true, forKey: "windowServerAware")  // (its "scale" key, for cheaper half-res blur, turns the blur off)
-        grain.contents = noise(frame.size)
-        grain.magnificationFilter = .nearest
+        grain.contents = noise(frame.size, scale: screen.backingScaleFactor)
+        grain.compositingFilter = "softLightBlendMode"  // mid gray drops out: texture without a gray film
         for l in [content, backdrop, tint, grain] { l.frame = CGRect(origin: .zero, size: frame.size) }
         [backdrop, tint, grain].forEach(content.addSublayer)
         window.contentView!.layer!.addSublayer(content)
@@ -226,6 +231,8 @@ final class Settings: ObservableObject {
         watchFrontApp()
         NotificationCenter.default.addObserver(self, selector: #selector(buildOverlays),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applyLook),  // a new accent color
+                                               name: NSColor.systemColorsDidChangeNotification, object: nil)
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp, .leftMouseDragged]) { [weak self] _ in self?.soon() }
         // The poll stops while nobody can see the screen: display asleep, another user's session, screen locked.
         let pauses: [(NotificationCenter, Notification.Name, Notification.Name, String)] = [
@@ -329,11 +336,13 @@ final class Settings: ObservableObject {
         dirty = true
     }
 
-    func applyLook() {
-        let blur = variableBlur(s.blur, shapeMask(s.shape))
+    @objc func applyLook() {
+        let blur = caFilter("variableBlur", ["inputRadius": s.blur, "inputMaskImage": shapeMask(s.shape), "inputNormalizeEdges": true])
+        // Blurring mixes colors toward gray; win them back like the system materials do, more for a stronger blur.
+        let saturate = caFilter("colorSaturate", ["inputAmount": 1 + 0.6 * min(s.blur / 20, 1)])
         let tint = color(s.color).withAlphaComponent(s.tint).cgColor
         for o in overlays {
-            o.backdrop.filters = blur.map { [$0] }
+            o.backdrop.filters = [blur, saturate].compactMap { $0 }
             o.tint.backgroundColor = tint
             o.grain.opacity = Float(s.grain)
         }
@@ -487,7 +496,7 @@ struct Panel: View {
                 .labelsHidden()
             Card {
                 SliderRow(icon: "drop", title: "블러", value: $s.blur, max: 50)
-                SliderRow(icon: "aqi.medium", title: "그레인", value: $s.grain, max: 0.2)
+                SliderRow(icon: "aqi.medium", title: "그레인", value: $s.grain, max: 0.5)
                 SliderRow(icon: "circle.lefthalf.filled", title: "색 농도", value: $s.tint, max: 0.8)
                 Divider()
                 swatchRow
@@ -552,22 +561,30 @@ struct Panel: View {
     }
 
     var swatchRow: some View {
-        HStack(spacing: 7) {
-            Text("색상").font(.system(size: 12)).frame(width: 74, alignment: .leading)
-            ForEach(swatches, id: \.0) { hex, name in
-                Button { s.color = hex } label: {
-                    Circle()
-                        .fill(Color(nsColor: color(hex)))
-                        .frame(width: 18, height: 18)
-                        .overlay(Circle().strokeBorder(Color.primary.opacity(s.color == hex ? 0.85 : 0.15), lineWidth: s.color == hex ? 2 : 1))
+        VStack(alignment: .leading, spacing: 8) {
+            Text("색상").font(.system(size: 12))
+            HStack(spacing: 6) {
+                ForEach(swatches, id: \.0) { key, name, ns in
+                    Button { s.color = key } label: {
+                        ZStack {
+                            // a rainbow rim tells the accent swatch from the preset of the same color
+                            if key == "accent" { Circle().fill(AngularGradient(colors: [.red, .yellow, .green, .blue, .purple, .red], center: .center)) }
+                            Circle().fill(Color(nsColor: ns)).padding(key == "accent" ? 4 : 0)
+                        }
+                        .frame(width: 16, height: 16)
+                        // the picked one gets a ring just outside, which shows on black in light mode too
+                        .overlay(Circle().strokeBorder(Color.primary.opacity(s.color == key ? 0.85 : 0.15), lineWidth: s.color == key ? 1.5 : 1)
+                            .padding(s.color == key ? -3 : 0))
+                    }
+                    .buttonStyle(.plain)
+                    .help(name)
                 }
-                .buttonStyle(.plain)
-                .help(name)
+                Spacer(minLength: 0)
+                ColorPicker("자세히", selection: Binding(get: { Color(nsColor: color(s.color)) }, set: { s.color = hex($0) }),
+                            supportsOpacity: false)
+                    .labelsHidden()
+                    .help("자세히 고르기")
             }
-            ColorPicker("자세히", selection: Binding(get: { Color(nsColor: color(s.color)) }, set: { s.color = hex($0) }),
-                        supportsOpacity: false)
-                .labelsHidden()
-                .help("자세히 고르기")
         }
     }
 
@@ -780,14 +797,13 @@ func menuIcon(on: Bool) -> NSImage {
     return image
 }
 
-func variableBlur(_ radius: Double, _ mask: CGImage) -> NSObject? {
+// A Core Animation filter of this type with these inputs, nil when this macOS lacks it.
+func caFilter(_ type: String, _ inputs: [String: Any]) -> NSObject? {
     let make = NSSelectorFromString("filterWithType:")
-    guard let type = NSClassFromString("CAFilter") as? NSObject.Type, type.responds(to: make),
-          let filter = type.perform(make, with: "variableBlur")?.takeUnretainedValue() as? NSObject
+    guard let cls = NSClassFromString("CAFilter") as? NSObject.Type, cls.responds(to: make),
+          let filter = cls.perform(make, with: type)?.takeUnretainedValue() as? NSObject
     else { return nil }
-    filter.setValue(radius, forKey: "inputRadius")
-    filter.setValue(mask, forKey: "inputMaskImage")
-    filter.setValue(true, forKey: "inputNormalizeEdges")
+    inputs.forEach { filter.setValue($1, forKey: $0) }
     return filter
 }
 
@@ -808,8 +824,10 @@ func shapeMask(_ shape: String) -> CGImage {
     return ctx.makeImage()!
 }
 
-func color(_ hex: String) -> NSColor {
-    let v = Int(hex, radix: 16) ?? 0
+// A preset's system color, else hex.
+func color(_ key: String) -> NSColor {
+    if let preset = swatches.first(where: { $0.0 == key }) { return preset.2 }
+    let v = Int(key, radix: 16) ?? 0
     return NSColor(srgbRed: CGFloat(v >> 16 & 0xFF) / 255, green: CGFloat(v >> 8 & 0xFF) / 255, blue: CGFloat(v & 0xFF) / 255, alpha: 1)
 }
 
@@ -818,10 +836,11 @@ func hex(_ c: Color) -> String {
     return [rgb.redComponent, rgb.greenComponent, rgb.blueComponent].map { String(format: "%02X", Int(($0 * 255).rounded())) }.joined()
 }
 
-// Gray static, one byte per point.
-func noise(_ size: CGSize) -> CGImage {
-    let w = Int(size.width), h = Int(size.height)
-    let px = Data((0..<w * h).map { _ in UInt8.random(in: 0...255) })
+// Gray static, one byte per pixel.
+func noise(_ size: CGSize, scale: CGFloat) -> CGImage {
+    let w = Int(size.width * scale), h = Int(size.height * scale)
+    var px = Data(count: w * h)
+    px.withUnsafeMutableBytes { arc4random_buf($0.baseAddress, $0.count) }
     return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 8, bytesPerRow: w,
                    space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGBitmapInfo(rawValue: 0),
                    provider: CGDataProvider(data: px as CFData)!, decode: nil,

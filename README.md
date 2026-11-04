@@ -87,10 +87,10 @@ open /Applications/Frost.app
 
 | 항목 | 설명 |
 |---|---|
-| 블러 | 뒤 화면이 흐려지는 정도 |
-| 그레인 | 필름 같은 입자감 |
+| 블러 | 뒤 화면이 흐려지는 정도. 흐릴수록 채도를 조금 올려서, 색이 섞여 회색으로 죽지 않게 한다 |
+| 그레인 | 필름 같은 입자감. 소프트 라이트로 섞어서 화면을 회색으로 바래게 하지 않고 질감만 더한다 |
 | 색 농도 | 고른 색을 얼마나 진하게 덮을지 |
-| 색상 | 잉크 · 세이지 · 스카이 · 샌드 · 민트 · 핑크 6가지, 오른쪽 칸을 누르면 아무 색이나 고를 수 있다 |
+| 색상 | macOS 시스템 색 10가지: 시스템 강조 색(무지개 테두리, 시스템 설정에서 고른 강조 색을 따라간다) · 파랑 · 보라 · 분홍 · 빨강 · 주황 · 노랑 · 초록 · 그래파이트 · 검정. 오른쪽 칸을 누르면 아무 색이나 고를 수 있다 |
 | 모양 | 블러가 깔리는 모양. **균일**(전체 같은 세기), **아래로**(아래로 갈수록 진하게), **위로**(위로 갈수록 진하게), **가장자리**(가운데는 옅고 가장자리로 갈수록 진하게) |
 
 ![모드, 색상, 모양을 바꾼 모습](docs/styles.gif)
@@ -164,9 +164,9 @@ open /Applications/Frost.app
 개발자용 메모.
 
 - **파일**: `main.swift` 하나에 앱 전체가 있다. `build.sh`는 빌드 · 검사 · 설치, `icon.swift`는 `AppIcon.icns`를 코드로 그린다 (없을 때만 `build.sh`가 실행)
-- **화면을 덮는 법**: 화면마다 클릭이 통과하는 창을 하나씩 띄우고, 맨 앞 창 바로 아래에 둔다. 창 안의 `CABackdropLayer`가 그 뒤를 블러하고, 그 위에 색과 그레인을 얹는다. 블러 모양은 `variableBlur` 필터의 세기 마스크로 만든다. 제외 · 그룹 창은 마스크에 구멍을 뚫어 선명하게 남긴다
+- **화면을 덮는 법**: 화면마다 클릭이 통과하는 창을 하나씩 띄우고, 맨 앞 창 바로 아래에 둔다. 창 안의 `CABackdropLayer`가 그 뒤를 블러하고 채도를 올린 뒤(`colorSaturate`), 그 위에 색과 그레인(소프트 라이트 합성)을 얹는다. 블러 모양은 `variableBlur` 필터의 세기 마스크로 만든다. 제외 · 그룹 창은 마스크에 구멍을 뚫어 선명하게 남긴다
 - **앞 창 찾기**: `CGWindowListCopyWindowInfo`로 창 목록을 앞에서부터 읽는다 (호출당 약 0.6ms). 앱 전환 · Space 변경 · 마우스 클릭/드래그 이벤트에 바로 반응하고, 손쉬운 사용 권한이 있으면 맨 앞 앱의 창 포커스 변화(AXObserver)도 받는다. 이벤트로 알 수 없는 변화는 0.1초 확인으로 잡는다. 화면이 잠기거나 꺼져 있는 동안은 이 확인을 멈춘다
-- **비공개 API**: `CABackdropLayer`, `CAFilter`(variableBlur), `CoreDockGet/SetAutoHideEnabled`, 전체 화면 Space를 알아보는 `CGSManagedDisplayGetCurrentSpace` · `CGSSpaceGetType`. 그래서 App Store에는 낼 수 없다. 모두 실행 중에 찾아 쓰기 때문에, macOS가 하나를 없애도 앱이 안 켜지는 대신 그 기능만 빠진다
+- **비공개 API**: `CABackdropLayer`, `CAFilter`(variableBlur · colorSaturate), `CoreDockGet/SetAutoHideEnabled`, 전체 화면 Space를 알아보는 `CGSManagedDisplayGetCurrentSpace` · `CGSSpaceGetType`. 그래서 App Store에는 낼 수 없다. 모두 실행 중에 찾아 쓰기 때문에, macOS가 하나를 없애도 앱이 안 켜지는 대신 그 기능만 빠진다
 - **검사**: `Frost.app/Contents/MacOS/Frost --selftest`가 포커스 · 제외 · 그룹 · 화면별 포커스 · 전체 화면 규칙을 17개 항목으로 확인한다. `build.sh`와 깃헙 Actions가 매번 돌리고, Actions는 Swift 6 모드로도 컴파일해 본다. 반응 속도 측정(`bench/run.sh`)과 직접 확인한 목록은 [docs/testing.md](docs/testing.md)에 있다
 - **컴파일**: Swift 6 언어 모드, 엄격한 동시성 검사에서도 경고 0개
 - **설정 저장 위치**: `defaults read local.frost`
