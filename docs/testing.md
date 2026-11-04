@@ -15,6 +15,8 @@ Frost.app/Contents/MacOS/Frost --selftest    # 따로 돌릴 때
 
 깃헙 Actions(`.github/workflows/check.yml`)가 커밋마다 macOS에서 빌드하고 자체 검사를 돌린다. Swift 6 언어 모드로도 컴파일해서, 스레드를 잘못 쓰는 코드가 들어오면 바로 실패한다. README 맨 위 배지가 그 결과다.
 
+Homebrew로 설치하는 길은 탭 저장소([e-jiwon/homebrew-tap](https://github.com/e-jiwon/homebrew-tap))의 CI가 확인한다. formula가 바뀔 때마다 깨끗한 macOS에서 소스 빌드 → `brew test`(자체 검사) → `brew audit --strict --online` → 삭제까지 돌린다.
+
 | 영역 | 확인하는 것 |
 |---|---|
 | 머물면 흐림 줄이기 | 흐린 곳에 0.5초 머물면 옅어진다 · 선명한 창으로 옮기면 바로 돌아온다 · 다시 머물면 0.5초를 처음부터 센다 |
