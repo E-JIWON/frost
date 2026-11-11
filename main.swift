@@ -414,10 +414,18 @@ final class Settings: ObservableObject {
         }
     }
 
-    // Real windows of other apps, front to back.
+    // Real windows of other apps, front to back. None while Mission Control or Launchpad covers the screens with
+    // Dock windows: Mission Control shrinks the panes like windows and flies them across the screen.
     func windowList() -> [Win] {
         let me = ProcessInfo.processInfo.processIdentifier
         let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        let dockOver = list.contains { info in
+            guard info[kCGWindowLayer as String] as? Int ?? 0 > 0, let pid = info[kCGWindowOwnerPID as String] as? pid_t,
+                  let d = info[kCGWindowBounds as String] as? NSDictionary, let r = CGRect(dictionaryRepresentation: d)
+            else { return false }
+            return overlays.contains { $0.bounds == r } && bundleID(pid) == "com.apple.dock"
+        }
+        if dockOver { return [] }
         return list.compactMap { info in
             guard info[kCGWindowLayer as String] as? Int == 0,
                   let pid = info[kCGWindowOwnerPID as String] as? pid_t, pid != me,
